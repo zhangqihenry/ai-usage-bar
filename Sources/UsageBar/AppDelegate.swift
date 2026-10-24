@@ -73,8 +73,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         timer?.invalidate()
         let tick = Timer(timeInterval: TimeInterval(settings.refreshIntervalSeconds),
                          repeats: true) { [weak self] _ in
+            // Strong local binding: a `weak self` optional cannot be captured by
+            // the sending Task closure (Swift 6 rejects it as a captured var).
+            guard let self else { return }
             Task { @MainActor in
-                await self?.refresh(force: false)
+                await self.refresh(force: false)
             }
         }
         // `.common` keeps the timer alive while a menu is tracking, which is
@@ -91,8 +94,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            guard let self else { return }
             Task { @MainActor in
-                await self?.refresh(force: true)
+                await self.refresh(force: true)
             }
         }
     }
@@ -119,7 +123,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isRefreshing: isRefreshing,
             launchAtLogin: LaunchAtLogin.isEnabled,
             onRefresh: { [weak self] in
-                Task { @MainActor in await self?.refresh(force: true) }
+                guard let self else { return }
+                Task { @MainActor in await self.refresh(force: true) }
             },
             onSettings: { [weak self] in self?.showSettings() },
             onToggleLaunchAtLogin: { [weak self] in self?.toggleLaunchAtLogin() },
@@ -140,7 +145,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 model: model,
                 version: AppDelegate.version,
                 onRefresh: { [weak self] in
-                    Task { @MainActor in await self?.refresh(force: true) }
+                    guard let self else { return }
+                    Task { @MainActor in await self.refresh(force: true) }
                 },
                 onOpenFolder: { AppPaths.reveal() }
             )
