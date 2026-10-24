@@ -11,6 +11,7 @@ AppKit and SwiftUI wiring. Nothing here parses JSON or reads Keychain — it ask
 | `MenuBuilder.swift` | Builds the dropdown: service sections, window rows with bars, error lines, actions. Also `ClosureMenuItem`, the closure-backed menu item. |
 | `SettingsView.swift` | SwiftUI form + `SettingsModel` (bridges edits to the delegate) + `SettingsWindowController`. |
 | `LaunchAtLogin.swift` | Writes/removes `~/Library/LaunchAgents/io.github.zhangqihenry.ai-usage-bar.plist` and bootstraps it. |
+| `Links.swift` | External URLs the UI opens (the credential setup guide). Change here when forking. |
 | `CLI.swift` | `--print`, `--json`, `--version`, `--help`; exit codes; human readable table. |
 | `Log.swift` | `USAGEBAR_DEBUG=1` file logging with size cap. A menu bar app has no stderr. |
 

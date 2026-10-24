@@ -18,6 +18,7 @@ enum MenuBuilder {
         var onSettings: () -> Void
         var onToggleLaunchAtLogin: () -> Void
         var onOpenFolder: () -> Void
+        var onOpenSetup: () -> Void
         var onQuit: () -> Void
     }
 
@@ -29,6 +30,12 @@ enum MenuBuilder {
             let visible = service == .codex ? context.settings.showCodex : context.settings.showClaude
             guard visible else { continue }
             appendService(service, context: context, to: menu)
+        }
+
+        // First-run help. Only offered when a service genuinely lacks credentials,
+        // so it never becomes permanent menu noise for a working install.
+        if needsCredentialHelp(context) {
+            menu.addItem(action(title: L.t("menu.loginHelp"), key: "", handler: context.onOpenSetup))
         }
 
         menu.addItem(.separator())
@@ -133,6 +140,14 @@ enum MenuBuilder {
             .foregroundColor: severityColor(window.usedPercent, settings: settings)
         ])
         return item
+    }
+
+    private static func needsCredentialHelp(_ context: Context) -> Bool {
+        Service.allCases.contains { service in
+            let visible = service == .codex ? context.settings.showCodex : context.settings.showClaude
+            guard visible else { return false }
+            return context.snapshot.result(for: service)?.errorCode == "credentials_missing"
+        }
     }
 
     private static func severityColor(_ used: Double, settings: AppSettings) -> NSColor {

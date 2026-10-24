@@ -129,6 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onSettings: { [weak self] in self?.showSettings() },
             onToggleLaunchAtLogin: { [weak self] in self?.toggleLaunchAtLogin() },
             onOpenFolder: { AppPaths.reveal() },
+            onOpenSetup: { Links.open(Links.setup) },
             onQuit: { NSApp.terminate(nil) }
         ))
     }

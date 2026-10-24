@@ -40,6 +40,7 @@ public enum L {
         "menu.plan": ("套餐 %@", "Plan %@"),
         "menu.proxy": ("代理 %@", "Proxy %@"),
         "menu.limitReached": ("已达上限", "limit reached"),
+        "menu.loginHelp": ("如何登录并获取用量…", "How to get credentials…"),
 
         // Settings window
         "settings.title": ("用量栏设置", "Usage Bar Settings"),

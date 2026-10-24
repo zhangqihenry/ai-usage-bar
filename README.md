@@ -40,10 +40,14 @@ example).
 
 - macOS 13 (Ventura) or newer.
 - Command Line Tools to build (`xcode-select --install`). Xcode is not required.
-- At least one signed-in client:
-  - **Codex / ChatGPT desktop** → `~/.codex/auth.json`
-  - **Claude Code** → Keychain item `Claude Code-credentials`, or
-    `~/.claude/.credentials.json`, or `$CLAUDE_CODE_OAUTH_TOKEN`
+- **One signed-in developer tool per service.** Installing the desktop chat apps
+  is not enough — the quota endpoints only accept the OAuth sessions that Codex
+  and Claude Code create:
+  - **Codex** → `codex login`, which writes `~/.codex/auth.json`
+  - **Claude** → `claude`, which writes the Keychain item `Claude Code-credentials`
+
+  Two commands, once per machine. Details and verification steps:
+  [docs/SETUP.md](docs/SETUP.md).
 
 ## Install
 

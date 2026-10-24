@@ -75,14 +75,17 @@ and write the new token, and the next poll picks it up.
 
 ## "未找到登录凭证"
 
-Nothing to read yet:
+Nothing to read yet. [SETUP.md](SETUP.md) is the step-by-step version; the short
+form:
 
-- Codex: `~/.codex/auth.json` does not exist. Sign in with Codex or the ChatGPT
-  desktop app. An `OPENAI_API_KEY`-only file is not enough — quota needs an OAuth
-  session.
+- Codex: `~/.codex/auth.json` does not exist. Run `codex login` (Codex CLI) or
+  sign in with the Codex desktop app. The plain ChatGPT desktop app does not
+  create this file, and an `OPENAI_API_KEY`-only file is not enough — quota needs
+  an OAuth session.
 - Claude: no Keychain item `Claude Code-credentials`, no
   `~/.claude/.credentials.json`, no `$CLAUDE_CODE_OAUTH_TOKEN`. Install Claude
-  Code and sign in once.
+  Code (`npm i -g @anthropic-ai/claude-code`) and run `claude` once. The plain
+  Claude desktop app does not create this credential.
 
 Check the Keychain item exists:
 

@@ -6,6 +6,7 @@ it without rediscovering the same traps.
 
 | File | Read it when |
 |---|---|
+| [SETUP.md](SETUP.md) | You need to create credentials, or wonder why the desktop apps are not enough. Start here for a fresh machine. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | You are changing the data flow, adding a provider, or wondering where state lives. |
 | [DATA-SOURCES.md](DATA-SOURCES.md) | A number looks wrong, a request fails, or a vendor changed something. Every endpoint, header and credential path is listed here. |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | You are setting up the toolchain, running tests, debugging the menu bar, or cutting a release. |
