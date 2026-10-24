@@ -1,0 +1,22 @@
+# Swift Package Manager build products
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode user state (kept out of git even though the project is SwiftPM-only)
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# App bundles produced by scripts/build-app.sh
+dist/
+*.app
+
+# Per-user runtime state that must never be committed
+*.snapshot.json
+*.credentials.json
+.env
+
+# macOS noise
+.DS_Store
+._*

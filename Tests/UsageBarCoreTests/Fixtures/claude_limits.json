@@ -1,0 +1,29 @@
+{
+  "five_hour": null,
+  "seven_day": null,
+  "seven_day_opus": null,
+  "seven_day_sonnet": null,
+  "limits": [
+    {
+      "kind": "session",
+      "percent": 42.0,
+      "resets_at": "2026-10-23T18:59:59.528743+00:00"
+    },
+    {
+      "kind": "weekly_all",
+      "percent": 18.0,
+      "resets_at": "2026-10-30T00:00:00.000000+00:00"
+    },
+    {
+      "kind": "weekly_scoped",
+      "percent": 7.0,
+      "resets_at": "2026-10-30T00:00:00.000000+00:00",
+      "scope": {
+        "model": {
+          "id": "claude-opus-4",
+          "display_name": "Opus"
+        }
+      }
+    }
+  ]
+}

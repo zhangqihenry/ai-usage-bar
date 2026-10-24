@@ -1,0 +1,22 @@
+{
+  "user_id": "user-test",
+  "account_id": "083af435-0000-0000-0000-000000000000",
+  "email": "test@example.com",
+  "plan_type": "prolite",
+  "rate_limit": {
+    "allowed": true,
+    "limit_reached": false,
+    "primary_window": {
+      "used_percent": 0,
+      "limit_window_seconds": 604800,
+      "reset_after_seconds": 590415,
+      "reset_at": 1793325915
+    },
+    "secondary_window": null
+  },
+  "credits": {
+    "has_credits": false,
+    "unlimited": false,
+    "balance": "0"
+  }
+}
