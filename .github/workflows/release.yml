@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history: build-app.sh derives CFBundleVersion from the commit count.
           fetch-depth: 0
