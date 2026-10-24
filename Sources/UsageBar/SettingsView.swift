@@ -67,6 +67,23 @@ struct SettingsView: View {
             }
 
             Section {
+                Stepper(L.t("settings.warnThreshold", Int(model.settings.warnThreshold)),
+                        value: $model.settings.warnThreshold,
+                        in: 50...95,
+                        step: 5)
+                Stepper(L.t("settings.dangerThreshold", Int(model.settings.dangerThreshold)),
+                        value: $model.settings.dangerThreshold,
+                        in: min(100, model.settings.warnThreshold + 5)...100,
+                        step: 5)
+                Toggle(L.t("settings.notify"), isOn: $model.settings.notifyOnThresholds)
+                Text(L.t("settings.notifyHint"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text(L.t("settings.notifications"))
+            }
+
+            Section {
                 Toggle(Service.codex.displayName, isOn: $model.settings.showCodex)
                 Toggle(Service.claude.displayName, isOn: $model.settings.showClaude)
             } header: {

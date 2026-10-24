@@ -39,9 +39,13 @@ enum Log {
         try? empty.write(to: url)
     }
 
-    private static func timestamp() -> String {
+    private static let formatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        return formatter.string(from: Date())
+        return formatter
+    }()
+
+    private static func timestamp() -> String {
+        formatter.string(from: Date())
     }
 }

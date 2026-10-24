@@ -3,8 +3,9 @@ import Foundation
 /// Where the app keeps its own state. Everything lives inside
 /// `~/Library/Application Support/UsageBar/` so uninstalling is a folder delete.
 ///
-/// `USAGEBAR_HOME` overrides the root, which the test suite and the CLI
-/// `--print` mode use to avoid touching the real user state.
+/// `USAGEBAR_HOME` overrides the root, for the test suite and for trying a
+/// build without touching the real user state. (The CLI reads settings.json
+/// from here but never writes the snapshot; see `UsageService(persistent:)`.)
 public enum AppPaths {
     public static var supportDirectory: URL {
         if let override = ProcessInfo.processInfo.environment["USAGEBAR_HOME"], !override.isEmpty {

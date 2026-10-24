@@ -115,12 +115,19 @@ public enum WindowClassifier {
         var session: QuotaWindow?
         var weekly: QuotaWindow?
 
+        // The window's `kind` is rewritten to match the slot it lands in, so the
+        // menu never labels the session slot "Week" after a collision.
         func place(_ entry: (seconds: Int?, window: QuotaWindow), fallback: QuotaWindowKind) {
+            var window = entry.window
+            func fill(_ slot: QuotaWindowKind) {
+                window.kind = slot
+                if slot == .session { session = window } else { weekly = window }
+            }
             switch kind(forSeconds: entry.seconds) ?? fallback {
             case .session:
-                if session == nil { session = entry.window } else if weekly == nil { weekly = entry.window }
+                if session == nil { fill(.session) } else if weekly == nil { fill(.weekly) }
             case .weekly:
-                if weekly == nil { weekly = entry.window } else if session == nil { session = entry.window }
+                if weekly == nil { fill(.weekly) } else if session == nil { fill(.session) }
             }
         }
 
@@ -173,6 +180,12 @@ public struct ServiceUsage: Codable, Equatable, Sendable {
         case .session: return session
         case .weekly: return weekly
         }
+    }
+
+    /// True when these numbers were fetched longer than `limit` ago, i.e. the
+    /// refreshes since then failed and the UI is showing kept data.
+    public func isStale(limit: TimeInterval, now: Date = Date()) -> Bool {
+        now.timeIntervalSince(fetchedAt) > limit
     }
 
     /// Highest used percentage across all buckets, used for colour coding.

@@ -45,10 +45,9 @@ open "$DEST"
 
 if [ "$WANT_LOGIN" = "1" ]; then
     echo "==> Enabling launch at login"
-    # The app owns the LaunchAgent; the simplest trigger is the menu item.
-    osascript >/dev/null 2>&1 <<APPLESCRIPT || echo "    (enable it from the menu: Launch at Login)"
-tell application "System Events" to tell process "$APP_NAME" to click menu bar item 1 of menu bar 2
-APPLESCRIPT
+    # The installed binary writes the LaunchAgent itself, so it points at $DEST.
+    "$DEST/Contents/MacOS/$APP_NAME" --enable-launch-at-login \
+        || echo "    (enable it from the menu instead: Launch at Login)"
 fi
 
 echo "==> Installed. Look for the Cx / Cl numbers in the menu bar."

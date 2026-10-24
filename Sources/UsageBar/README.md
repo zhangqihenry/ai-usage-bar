@@ -10,7 +10,8 @@ AppKit and SwiftUI wiring. Nothing here parses JSON or reads Keychain — it ask
 | `StatusItemController.swift` | Creates the `NSStatusItem`, renders the attributed title from `MenuBarTitle.segments`, handles the click that pops the menu, builds the tooltip. |
 | `MenuBuilder.swift` | Builds the dropdown: service sections, window rows with bars, error lines, actions. Also `ClosureMenuItem`, the closure-backed menu item. |
 | `SettingsView.swift` | SwiftUI form + `SettingsModel` (bridges edits to the delegate) + `SettingsWindowController`. |
-| `LaunchAtLogin.swift` | Writes/removes `~/Library/LaunchAgents/io.github.zhangqihenry.ai-usage-bar.plist` and bootstraps it. |
+| `Notifier.swift` | Feeds each snapshot to `ThresholdTracker` and posts its alerts through UserNotifications; a no-op outside an `.app` bundle. |
+| `LaunchAtLogin.swift` | Writes/removes `~/Library/LaunchAgents/io.github.zhangqihenry.ai-usage-bar.plist`. Never calls `launchctl`: bootstrap would start a duplicate, bootout would kill the running app. Re-points the plist when the bundle moved. |
 | `Links.swift` | External URLs the UI opens (the credential setup guide). Change here when forking. |
 | `CLI.swift` | `--print`, `--json`, `--version`, `--help`; exit codes; human readable table. |
 | `Log.swift` | `USAGEBAR_DEBUG=1` file logging with size cap. A menu bar app has no stderr. |

@@ -16,16 +16,43 @@ public actor UsageService {
         .claude: 240
     ]
 
+    /// Pause after an HTTP 429, doubled for every consecutive 429 and capped.
+    /// Honoured even by forced refreshes: retrying into a rate limit only
+    /// extends it.
+    static let rateLimitBackoff: TimeInterval = 300
+    static let rateLimitBackoffCap: TimeInterval = 3600
+
+    /// Performs one provider call. Injectable so tests can drive the merge and
+    /// backoff logic without the network.
+    public typealias Fetcher = @Sendable (Service, HTTPClient, Date) async -> ServiceResult
+
     private let store: SnapshotStore
+    private let persistent: Bool
+    private let fetcher: Fetcher
     private var settings: AppSettings
     private var snapshot: UsageSnapshot
     private var lastAttempt: [Service: Date] = [:]
+    private var rateLimitStreak: [Service: Int] = [:]
+    private var notBefore: [Service: Date] = [:]
+    private var client: HTTPClient?
     private var isRefreshing = false
 
-    public init(settings: AppSettings, store: SnapshotStore = SnapshotStore()) {
+    /// - Parameter persistent: false keeps everything in memory: no cached
+    ///   snapshot is loaded and nothing is written. The CLI uses this so a one
+    ///   shot `--print` reports only what it fetched itself and never rewrites
+    ///   the running app's cache.
+    /// - Parameter fetcher: replaces the real provider calls (tests only).
+    public init(settings: AppSettings,
+                store: SnapshotStore = SnapshotStore(),
+                persistent: Bool = true,
+                fetcher: Fetcher? = nil) {
         self.store = store
+        self.persistent = persistent
+        self.fetcher = fetcher ?? { service, client, now in
+            await UsageService.fetch(service, using: client, now: now)
+        }
         self.settings = settings
-        self.snapshot = store.load() ?? UsageSnapshot()
+        self.snapshot = persistent ? (store.load() ?? UsageSnapshot()) : UsageSnapshot()
     }
 
     public func apply(_ settings: AppSettings) {
@@ -42,8 +69,8 @@ public actor UsageService {
     /// Refreshes the enabled services.
     ///
     /// - Parameter force: ignore the per-service minimum interval (used by the
-    ///   "Refresh Now" menu item). The actor still refuses to run two refreshes
-    ///   simultaneously.
+    ///   "Refresh Now" menu item). A 429 backoff still applies, and the actor
+    ///   still refuses to run two refreshes simultaneously.
     @discardableResult
     public func refresh(force: Bool = false) async -> UsageSnapshot {
         if isRefreshing { return snapshot }
@@ -53,22 +80,24 @@ public actor UsageService {
         let now = Date()
         let targets = Service.allCases.filter { service in
             guard isEnabled(service) else { return false }
+            if let until = notBefore[service], until > now { return false }
             guard !force else { return true }
             guard let last = lastAttempt[service] else { return true }
             return now.timeIntervalSince(last) >= (Self.minimumInterval[service] ?? 60)
         }
         guard !targets.isEmpty else { return snapshot }
 
-        let client = HTTPClient(proxy: settings.proxy)
+        let client = currentClient()
         for service in targets { lastAttempt[service] = now }
 
         // Both providers are independent, so fire them together; total latency
         // is the slower of the two rather than the sum.
+        let fetcher = self.fetcher
         let results = await withTaskGroup(of: (Service, ServiceResult).self,
                                           returning: [(Service, ServiceResult)].self) { group in
             for service in targets {
                 group.addTask {
-                    (service, await Self.fetch(service, using: client, now: now))
+                    (service, await fetcher(service, client, now))
                 }
             }
             var collected: [(Service, ServiceResult)] = []
@@ -79,17 +108,54 @@ public actor UsageService {
         var merged = snapshot.results
         for (service, fresh) in results {
             var result = fresh
+            schedule(after: &result, for: service, now: Date())
             // Keep the previous numbers when a refresh fails: showing "42%" with
-            // a warning beats showing nothing at all.
+            // a warning beats showing nothing at all. The kept usage carries its
+            // own `fetchedAt`, which the UI uses to flag it as stale.
             if result.usage == nil, let previous = merged[service]?.usage {
                 result.usage = previous
             }
             merged[service] = result
         }
 
+        // `updatedAt` is the time of the last attempt, successful or not.
+        // Freshness of the numbers themselves is `ServiceUsage.fetchedAt`.
         snapshot = UsageSnapshot(results: merged, updatedAt: Date())
-        store.save(snapshot)
+        if persistent { store.save(snapshot) }
         return snapshot
+    }
+
+    /// Updates the per-service pacing after a call finished.
+    private func schedule(after result: inout ServiceResult, for service: Service, now: Date) {
+        switch result.errorCode {
+        case UsageError.rateLimited.code:
+            let streak = (rateLimitStreak[service] ?? 0) + 1
+            rateLimitStreak[service] = streak
+            let delay = min(Self.rateLimitBackoffCap,
+                            Self.rateLimitBackoff * pow(2, Double(streak - 1)))
+            let until = now.addingTimeInterval(delay)
+            notBefore[service] = until
+            result.errorDetail = "retry after \(Format.clock(until))"
+        case UsageError.network("").code:
+            // The request never reached the vendor, so it cost no quota: let the
+            // next tick retry instead of waiting out the minimum interval.
+            lastAttempt[service] = nil
+            rateLimitStreak[service] = nil
+            notBefore[service] = nil
+        default:
+            rateLimitStreak[service] = nil
+            notBefore[service] = nil
+        }
+    }
+
+    /// One client per proxy configuration, so connections are reused between
+    /// refreshes and a proxy change takes effect on the next call.
+    private func currentClient() -> HTTPClient {
+        if let client, client.proxy == settings.proxy { return client }
+        client?.invalidate()
+        let fresh = HTTPClient(proxy: settings.proxy)
+        client = fresh
+        return fresh
     }
 
     /// Runs one provider, converting throws into a storable `ServiceResult`.

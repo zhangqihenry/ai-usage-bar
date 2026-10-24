@@ -66,11 +66,20 @@ UsageBar --print            # human readable, exit 2 if a service failed
 USAGEBAR_LANG=en UsageBar --print
 ```
 
+`--print` and `--json` keep their snapshot in memory: they never read or write
+`snapshot.json`, so running them next to the app leaves its cache alone (they do
+still spend one call against each vendor's rate limit).
+
 Run the app against throwaway state while testing:
 
 ```bash
 USAGEBAR_HOME=/tmp/usagebar-dev UsageBar --print
+USAGEBAR_HOME=/tmp/usagebar-dev USAGEBAR_DEBUG=1 dist/UsageBar.app/Contents/MacOS/UsageBar
 ```
+
+Only one copy of the app runs per session (matched by bundle identifier); a
+second launch exits immediately, so quit the installed app before testing a
+`dist/` build.
 
 ## The menu bar item is not visible
 

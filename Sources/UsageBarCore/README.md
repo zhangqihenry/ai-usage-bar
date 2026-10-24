@@ -11,9 +11,10 @@ test executable and would run on a server.
 | `HTTPClient.swift` | One `URLSession` per proxy configuration, GET + JSON helpers, maps HTTP status codes to `UsageError`. |
 | `CodexProvider.swift` | ChatGPT/Codex quota endpoint and its tolerant parser. |
 | `ClaudeProvider.swift` | Anthropic OAuth usage endpoint; understands both the flat bucket shape and the newer `limits` array. |
-| `UsageService.swift` | Actor that decides what to refresh, throttles per service, runs providers in parallel, merges with the previous snapshot, persists. |
+| `UsageService.swift` | Actor that decides what to refresh, throttles per service (minimum interval, 429 backoff), runs providers in parallel, merges with the previous snapshot, persists (or stays in memory for the CLI). |
 | `SnapshotStore.swift` | Reads/writes `snapshot.json`. |
 | `Settings.swift` | `AppSettings`, `ProxyConfiguration`, clamping, and the JSON settings store. |
+| `ThresholdTracker.swift` | Decides when a window crossed the amber/red threshold and a notification is due (first reading, stale and failed data never alert). |
 | `MenuBarTitle.swift` | Snapshot + settings → `[TitleSegment]` (text + severity). Shared by the menu bar, tooltip, CLI and tests. |
 | `Format.swift` | Percent, countdown (`2h13m`), clock, ASCII bar, title value formatting. |
 | `Localization.swift` | Chinese/English string table and error descriptions. |

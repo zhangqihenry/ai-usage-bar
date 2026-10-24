@@ -12,6 +12,16 @@ if CLI.isRequested {
     CLI.run() // never returns
 }
 
+// One menu bar item per user session. A second copy (a manual launch next to
+// the login item, a double-click on a second install) would draw a duplicate
+// status item and double the vendor API calls, so it activates nothing and
+// quits.
+if let bundleID = Bundle.main.bundleIdentifier,
+   NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+       .contains(where: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }) {
+    exit(0)
+}
+
 let application = NSApplication.shared
 // Top level code is not actor isolated, but `AppDelegate` is @MainActor (AppKit
 // requires it). Main is guaranteed here: `main.swift` runs on the main thread

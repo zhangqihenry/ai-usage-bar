@@ -18,6 +18,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isRefreshing = false
     private var settingsWindow: SettingsWindowController?
     private var settingsModel: SettingsModel?
+    /// Debounced refresh after a network relevant settings edit.
+    private var pendingSettingsRefresh: Task<Void, Never>?
+    /// Quick retry while a service reports a transport error.
+    private var networkRetry: Task<Void, Never>?
+    private var networkRetryCount = 0
+    private let notifier = Notifier()
 
     override init() {
         let loaded = SettingsStore().load()
@@ -31,6 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Log.trimIfNeeded()
         Log.debug("launch: version \(AppDelegate.version), settings \(AppPaths.settingsFile.path)")
+        LaunchAtLogin.repairIfNeeded()
+        if settings.notifyOnThresholds { notifier.requestPermission() }
 
         statusController = StatusItemController(fontSize: settings.fontSize)
         statusController.menuProvider = { [weak self] in self?.makeMenu() ?? NSMenu() }
@@ -57,6 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         isRefreshing = true
         render()
 
+        // Hand over the current settings first, so a refresh never runs with a
+        // proxy or service selection the user has already changed.
+        await service.apply(settings)
         snapshot = await service.refresh(force: force)
         Log.debug("refresh done: " + snapshot.results.map { key, value in
             "\(key.rawValue)=\(value.usage.map { "\(Int($0.maxUsedPercent))%" } ?? value.errorCode ?? "nil")"
@@ -64,9 +75,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         isRefreshing = false
         render()
+        notifier.process(snapshot, settings: settings)
         // Restart the countdown from the moment the fetch finished, so the next
         // tick is a full interval away even if this one was slow.
         scheduleTimer()
+        scheduleNetworkRetryIfNeeded()
+    }
+
+    /// A transport error (offline, proxy not up yet) costs no vendor quota, so
+    /// it is retried well before the next tick: 30 s, 60 s, 120 s ... capped at
+    /// the polling interval.
+    private func scheduleNetworkRetryIfNeeded() {
+        networkRetry?.cancel()
+        let failing = Service.allCases.contains { service in
+            isVisible(service) && snapshot.result(for: service)?.errorCode == UsageError.network("").code
+        }
+        guard failing else {
+            networkRetryCount = 0
+            return
+        }
+        let delay = min(Double(settings.refreshIntervalSeconds), 30 * pow(2, Double(networkRetryCount)))
+        networkRetryCount += 1
+        Log.debug("network error: retry in \(Int(delay))s")
+        networkRetry = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self.refresh(force: false)
+        }
+    }
+
+    private func isVisible(_ service: Service) -> Bool {
+        service == .codex ? settings.showCodex : settings.showClaude
     }
 
     private func scheduleTimer() {
@@ -86,8 +125,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         timer = tick
     }
 
-    /// Refresh immediately after the machine wakes: the cached numbers are
-    /// usually hours old by then.
+    /// Refresh shortly after the machine wakes: the cached numbers are usually
+    /// hours old by then. The short delay gives Wi-Fi and a local proxy time to
+    /// come back; if they are still down, the network retry takes over.
     private func observeWake() {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
@@ -96,6 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
                 await self.refresh(force: true)
             }
         }
@@ -156,17 +197,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Persists and applies a settings change coming from the settings window.
+    ///
+    /// The settings window reports every keystroke, so this must stay cheap:
+    /// display-only edits (style, thresholds, remaining/used) just re-render.
+    /// Only a proxy change or a newly enabled service needs the network, and that
+    /// refresh is debounced so typing a proxy host costs one request, not one per
+    /// character.
     private func apply(_ updated: AppSettings) {
+        let previous = settings
         settings = updated
         try? store.save(updated)
         statusController.apply(fontSize: settings.fontSize)
         render()
 
-        Task {
-            await service.apply(updated)
-            await refresh(force: true)
+        if updated.refreshIntervalSeconds != previous.refreshIntervalSeconds {
+            scheduleTimer()
         }
-        scheduleTimer()
+        if updated.notifyOnThresholds, !previous.notifyOnThresholds {
+            notifier.requestPermission()
+        }
+
+        let proxyChanged = updated.proxy != previous.proxy
+        let serviceEnabled = (updated.showCodex && !previous.showCodex)
+            || (updated.showClaude && !previous.showClaude)
+        guard proxyChanged || serviceEnabled else { return }
+
+        pendingSettingsRefresh?.cancel()
+        pendingSettingsRefresh = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled else { return }
+            // A new proxy deserves an immediate retry (it is usually the fix for
+            // a 403); a re-enabled service still respects its minimum interval.
+            await self.refresh(force: proxyChanged)
+        }
     }
 
     private func toggleLaunchAtLogin() {

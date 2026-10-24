@@ -115,6 +115,12 @@ public struct CodexProvider: Sendable {
 
         let primary = bucket(from: rateLimit.primaryWindow, now: now)
         let secondary = bucket(from: rateLimit.secondaryWindow, now: now)
+        // Windows are reported but none carries a percentage: the format moved
+        // under us, which deserves an error rather than an empty row.
+        if primary == nil, secondary == nil,
+           rateLimit.primaryWindow != nil || rateLimit.secondaryWindow != nil {
+            throw UsageError.decoding("rate_limit windows have no used_percent")
+        }
         let buckets = WindowClassifier.buckets(primary: primary, secondary: secondary)
 
         var notes: [String] = []
@@ -138,12 +144,14 @@ public struct CodexProvider: Sendable {
     }
 
     /// Converts one raw window into a `QuotaWindow`. Returns nil for an absent
-    /// window (normal on plans that only have a weekly cap).
+    /// window (normal on plans that only have a weekly cap) and for a window
+    /// without `used_percent`: showing "0%" for an unknown value would claim the
+    /// whole quota is available.
     static func bucket(from window: Response.Window?,
                        now: Date) -> (seconds: Int?, window: QuotaWindow)? {
-        guard let window else { return nil }
+        guard let window, let usedPercent = window.usedPercent else { return nil }
 
-        let percent = max(0, min(100, window.usedPercent ?? 0))
+        let percent = max(0, min(100, usedPercent))
         var resetsAt: Date?
         if let resetAt = window.resetAt, resetAt > 0 {
             resetsAt = Date(timeIntervalSince1970: TimeInterval(resetAt))

@@ -57,9 +57,15 @@ Notes:
 
 - The app needs a Claude **subscription** session; an Anthropic API key has no
   quota windows to report.
-- The first time the app reads the Keychain item, macOS asks for permission.
-  Choose "Always Allow". Rebuilding the app invalidates the grant, so a stable
-  build avoids the prompt.
+- The app reads the Keychain item through `/usr/bin/security`, the same tool
+  Claude Code writes it with, so there is usually no prompt. If macOS does ask,
+  choose "Always Allow"; the grant belongs to `security`, so rebuilding the app
+  does not bring the prompt back. An unanswered prompt times out after 30 s and
+  the menu says so.
+- The access token in that item lasts a few hours and only the `claude` CLI
+  renews it. If you use Claude Code solely through the Claude desktop app, the
+  item is never renewed and the menu shows "session expired"; run `claude` in a
+  terminal to renew it.
 - `CLAUDE_CODE_OAUTH_TOKEN` in the environment overrides everything. Useful in CI,
   but those tokens expire in about an hour.
 

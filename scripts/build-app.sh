@@ -84,8 +84,9 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Ad-hoc signature. Enough for the app to run locally and for the Keychain
-# "always allow" grant to stick; it is not a distribution signature.
+# Ad-hoc signature. Enough for the app to run locally (Apple silicon refuses
+# unsigned code); it is not a distribution signature. The Keychain is read via
+# /usr/bin/security, so this signature plays no part in Keychain access.
 echo "==> Signing (ad-hoc)"
 codesign --force --sign - --identifier "$BUNDLE_ID" "$APP" >/dev/null
 

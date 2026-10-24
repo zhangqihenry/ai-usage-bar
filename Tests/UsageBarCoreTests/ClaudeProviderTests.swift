@@ -48,6 +48,11 @@ enum ClaudeProviderTests {
         expectEqual(usage.weekly?.usedPercent, 18, "weekly_all from limits")
         expectEqual(usage.scoped.first?.scope, "Opus", "scoped model name")
         expectEqual(usage.scoped.first?.usedPercent, 7, "scoped percent")
+        expectEqual(usage.session?.resetsAt,
+                    ISO8601.parse("2026-10-23T18:59:59.528743+00:00"),
+                    "session reset from limits[].resets_at")
+        expectNotNil(usage.weekly?.resetsAt, "weekly reset from limits")
+        expectNotNil(usage.scoped.first?.resetsAt, "scoped reset from limits")
 
         expectEqual(ClaudeProvider.classify(kind: "session"), .session, "kind session")
         expectEqual(ClaudeProvider.classify(kind: "weekly_all"), .weekly, "kind weekly_all")

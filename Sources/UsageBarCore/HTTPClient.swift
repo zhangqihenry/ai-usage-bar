@@ -33,6 +33,17 @@ public final class HTTPClient: @unchecked Sendable {
         self.session = URLSession(configuration: configuration)
     }
 
+    /// A URLSession keeps its resources until it is invalidated, even after the
+    /// last reference to it is gone.
+    deinit {
+        session.finishTasksAndInvalidate()
+    }
+
+    /// Lets in-flight requests finish, then releases the session.
+    public func invalidate() {
+        session.finishTasksAndInvalidate()
+    }
+
     /// Performs a GET and returns the raw body, translating HTTP failures into
     /// `UsageError` so callers never have to look at status codes.
     public func get(_ url: URL, headers: [String: String]) async throws -> HTTPResponse {

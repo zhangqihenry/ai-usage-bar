@@ -93,9 +93,11 @@ public struct ClaudeCredentials: Equatable, Sendable {
 ///   2. `~/.claude/.credentials.json` (Linux, and macOS when present).
 ///   3. Keychain item "Claude Code-credentials" (macOS default install).
 ///
-/// Reading the Keychain item goes through `/usr/bin/security`, which triggers
-/// macOS' "allow access" prompt the first time. Clicking "Always Allow" grants
-/// the app permanent access; rebuilding the app invalidates that grant.
+/// Reading the Keychain item goes through `/usr/bin/security`, so the process
+/// macOS checks against the item's access list is that system tool, not this
+/// app. Claude Code writes the item with the same tool, which is why the read
+/// usually needs no prompt at all; if macOS does ask, "Always Allow" trusts
+/// `security`, and rebuilding or re-signing UsageBar does not reset that.
 public enum ClaudeCredentialStore {
     public static var credentialsFileURL: URL {
         URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/.credentials.json")
@@ -119,8 +121,16 @@ public enum ClaudeCredentialStore {
             return credentials
         }
 
-        if let data = keychainData(), let credentials = parse(data: data, source: "keychain") {
-            return credentials
+        switch readKeychain() {
+        case .found(let data):
+            if let credentials = parse(data: data, source: "keychain") { return credentials }
+        case .timedOut:
+            throw UsageError.credentialsMissing(
+                "Timed out reading the Keychain item \"\(keychainService)\". "
+                + "If macOS asked for access, choose Always Allow."
+            )
+        case .absent:
+            break
         }
 
         throw UsageError.credentialsMissing(
@@ -157,25 +167,57 @@ public enum ClaudeCredentialStore {
         )
     }
 
+    enum KeychainRead: Equatable {
+        case found(Data)
+        /// No such item, or the user denied access.
+        case absent
+        /// `security` did not finish in time, typically because the macOS
+        /// access prompt is waiting for an answer.
+        case timedOut
+    }
+
     /// Reads the generic password item through the `security` helper.
-    /// Returns nil when the item does not exist or the user denied access.
-    static func keychainData() -> Data? {
+    ///
+    /// Bounded by `timeout`: an unanswered access prompt would otherwise block
+    /// this refresh forever, and with it every later one (the service refuses
+    /// to start a refresh while one is running).
+    static func readKeychain(timeout: TimeInterval = 30) -> KeychainRead {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
         process.arguments = ["find-generic-password", "-s", keychainService, "-w"]
 
         let stdout = Pipe()
-        let stderr = Pipe()
         process.standardOutput = stdout
-        process.standardError = stderr
+        process.standardError = FileHandle.nullDevice
 
-        do { try process.run() } catch { return nil }
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
+        let exited = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in exited.signal() }
+        do { try process.run() } catch { return .absent }
 
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        let trimmed = Data(String(decoding: data, as: UTF8.self)
+        // Drain stdout while the process runs, so output larger than the pipe
+        // buffer cannot stall it.
+        let output = OutputBox()
+        let drained = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async {
+            output.data = stdout.fileHandleForReading.readDataToEndOfFile()
+            drained.signal()
+        }
+
+        if exited.wait(timeout: .now() + timeout) == .timedOut {
+            process.terminate()
+            return .timedOut
+        }
+        drained.wait()
+        guard process.terminationStatus == 0 else { return .absent }
+
+        let trimmed = Data(String(decoding: output.data, as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines).utf8)
-        return trimmed.isEmpty ? nil : trimmed
+        return trimmed.isEmpty ? .absent : .found(trimmed)
+    }
+
+    /// Hands the drained bytes from the reader queue back to the caller. The
+    /// `drained` semaphore orders the write before the read.
+    private final class OutputBox: @unchecked Sendable {
+        var data = Data()
     }
 }

@@ -26,10 +26,16 @@ example).
 
 - **Menu bar title** with per-service percentages, coloured amber at 70% and red
   at 90% (thresholds configurable), plus a `!` marker when a refresh fails.
-- **Dropdown**: one row per window with an ASCII progress bar, used percentage,
-  reset countdown, plan name, and any error in plain language.
+- **Dropdown**: one row per window with an ASCII progress bar, used (or
+  remaining) percentage, reset countdown, plan name, Claude extra usage when it
+  is switched on, vendor notes such as "limit reached", and any error in plain
+  language. Numbers kept from an earlier refresh are dimmed and labelled with
+  their age.
 - **Settings window** (⌘,): refresh interval, which windows to show, used vs
-  remaining, per-service toggles, proxy mode, reset to defaults.
+  remaining, amber/red thresholds, per-service toggles, proxy mode, reset to
+  defaults.
+- **Threshold alerts** (opt-in): a macOS notification when a window crosses the
+  amber or red threshold, once per level per window.
 - **Launch at login** via a LaunchAgent you can inspect and delete.
 - **Proxy aware**: system proxy, direct, or an explicit HTTP/SOCKS5 endpoint.
   Needed because `chatgpt.com` refuses connections from some regions.
@@ -91,9 +97,12 @@ sign, or remaining quota instead of used.
 UsageBar --print      # human readable report, exit 2 if a service failed
 UsageBar --json       # the snapshot as JSON
 UsageBar --version
+UsageBar --enable-launch-at-login    # what scripts/install.sh --login runs
 ```
 
-Useful in scripts and CI, and the first thing to attach to a bug report.
+Useful in scripts and CI, and the first thing to attach to a bug report. The CLI
+keeps its results in memory and never rewrites the running app's
+`snapshot.json`.
 
 ## Where state lives
 

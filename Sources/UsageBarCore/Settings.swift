@@ -36,6 +36,21 @@ public struct ProxyConfiguration: Codable, Equatable, Sendable {
         self.port = port
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case mode, scheme, host, port
+    }
+
+    /// Missing or unreadable keys fall back to their defaults, so a settings file
+    /// written by an older (or newer) release still loads.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = ProxyConfiguration()
+        mode = container.lenient(Mode.self, .mode) ?? defaults.mode
+        scheme = container.lenient(Scheme.self, .scheme) ?? defaults.scheme
+        host = container.lenient(String.self, .host) ?? defaults.host
+        port = container.lenient(Int.self, .port) ?? defaults.port
+    }
+
     /// Dictionary handed to `URLSessionConfiguration.connectionProxyDictionary`.
     /// `nil` means "let CFNetwork use the system settings".
     public var connectionProxyDictionary: [AnyHashable: Any]? {
@@ -122,8 +137,49 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var proxy: ProxyConfiguration = ProxyConfiguration()
     /// Menu bar text size in points.
     public var fontSize: Double = 11
+    /// Post a macOS notification when a window crosses the warning or danger
+    /// threshold. Off by default: turning it on triggers the permission prompt.
+    public var notifyOnThresholds: Bool = false
 
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case refreshIntervalSeconds, showCodex, showClaude, displayMode, titleStyle
+        case showRemaining, warnThreshold, dangerThreshold, proxy, fontSize
+        case notifyOnThresholds
+    }
+
+    /// Decodes key by key with per-field defaults. The synthesized decoder would
+    /// reject a file that lacks any key, and `SettingsStore.load()` would then
+    /// throw away every preference the moment a release adds a new field.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = AppSettings()
+        refreshIntervalSeconds = container.lenient(Int.self, .refreshIntervalSeconds)
+            ?? defaults.refreshIntervalSeconds
+        showCodex = container.lenient(Bool.self, .showCodex) ?? defaults.showCodex
+        showClaude = container.lenient(Bool.self, .showClaude) ?? defaults.showClaude
+        displayMode = container.lenient(DisplayMode.self, .displayMode) ?? defaults.displayMode
+        titleStyle = container.lenient(TitleStyle.self, .titleStyle) ?? defaults.titleStyle
+        showRemaining = container.lenient(Bool.self, .showRemaining) ?? defaults.showRemaining
+        warnThreshold = container.lenient(Double.self, .warnThreshold) ?? defaults.warnThreshold
+        dangerThreshold = container.lenient(Double.self, .dangerThreshold) ?? defaults.dangerThreshold
+        proxy = container.lenient(ProxyConfiguration.self, .proxy) ?? defaults.proxy
+        fontSize = container.lenient(Double.self, .fontSize) ?? defaults.fontSize
+        notifyOnThresholds = container.lenient(Bool.self, .notifyOnThresholds) ?? defaults.notifyOnThresholds
+    }
+
+    /// Age after which a service's numbers count as stale: three polling
+    /// intervals, never less than three of Claude's 240 s minimum gaps plus
+    /// slack, so a short interval does not flag healthy Claude data.
+    public var staleAfter: TimeInterval {
+        max(Double(refreshIntervalSeconds), 300) * 3
+    }
+
+    /// Whether `service` is switched on in settings.
+    public func isVisible(_ service: Service) -> Bool {
+        service == .codex ? showCodex : showClaude
+    }
 
     /// Clamps values that would otherwise break the UI. Called after decoding
     /// and whenever the settings window commits a change.
@@ -138,6 +194,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
             copy.proxy.host = "127.0.0.1"
         }
         return copy
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// `decodeIfPresent` that also swallows type mismatches (a hand edited
+    /// `"port": "7897"`), so one bad value costs one field, not the whole file.
+    func lenient<T: Decodable>(_ type: T.Type, _ key: Key) -> T? {
+        (try? decodeIfPresent(type, forKey: key)) ?? nil
     }
 }
 

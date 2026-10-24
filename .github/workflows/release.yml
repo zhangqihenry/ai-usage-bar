@@ -1,0 +1,69 @@
+name: Release
+
+# Publishes a GitHub release when a version tag is pushed:
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# The tag must match the VERSION file, so the bundle's CFBundleShortVersionString
+# and the release name can never disagree. The app is ad-hoc signed, not
+# notarised (that needs a paid Apple Developer ID), so the release notes tell
+# users how to clear the quarantine flag.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: build-app.sh derives CFBundleVersion from the commit count.
+          fetch-depth: 0
+
+      - name: Check tag matches VERSION
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match VERSION ($version)" >&2
+            exit 1
+          fi
+
+      - name: Self test
+        run: swift run UsageBarSelfTest
+
+      - name: Build release bundle
+        run: scripts/build-app.sh
+
+      - name: Package
+        run: |
+          ditto -c -k --keepParent dist/UsageBar.app "dist/UsageBar-$GITHUB_REF_NAME.zip"
+          shasum -a 256 "dist/UsageBar-$GITHUB_REF_NAME.zip" | tee "dist/UsageBar-$GITHUB_REF_NAME.zip.sha256"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="$(awk -v v="${GITHUB_REF_NAME#v}" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md)"
+          notes="$notes
+
+          ---
+          Ad-hoc signed, not notarised. After unzipping, move UsageBar.app to
+          /Applications and run once:
+
+              xattr -dr com.apple.quarantine /Applications/UsageBar.app"
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/UsageBar-$GITHUB_REF_NAME.zip" \
+            "dist/UsageBar-$GITHUB_REF_NAME.zip.sha256" \
+            --title "UsageBar $GITHUB_REF_NAME" \
+            --notes "$notes"

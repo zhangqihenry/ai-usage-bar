@@ -8,10 +8,14 @@ import UsageBarCore
 /// Exit codes:
 ///   0  every enabled service returned data
 ///   2  at least one enabled service failed
+///   1  launch at login could not be changed
 ///   64 unknown flag
 ///   70 timeout
 enum CLI {
-    private static let knownFlags: Set<String> = ["--help", "-h", "--version", "--print", "--json"]
+    private static let knownFlags: Set<String> = [
+        "--help", "-h", "--version", "--print", "--json",
+        "--enable-launch-at-login", "--disable-launch-at-login"
+    ]
 
     /// True when the process was started with one of our flags. Finder launches
     /// pass `-psn_...` arguments, which are ignored.
@@ -29,6 +33,24 @@ enum CLI {
         if args.contains("--version") {
             print("usagebar \(version)")
             exit(0)
+        }
+        // Used by scripts/install.sh --login. Run it from the installed bundle:
+        // the LaunchAgent points at whichever executable wrote it.
+        if args.contains("--enable-launch-at-login") || args.contains("--disable-launch-at-login") {
+            let enable = args.contains("--enable-launch-at-login")
+            if enable, !Bundle.main.bundlePath.hasSuffix(".app") {
+                FileHandle.standardError.write(Data(
+                    "usagebar: run this from UsageBar.app/Contents/MacOS/UsageBar, not a bare build\n".utf8))
+                exit(1)
+            }
+            do {
+                if enable { try LaunchAtLogin.enable() } else { try LaunchAtLogin.disable() }
+                print("launch at login \(enable ? "enabled" : "disabled"): \(LaunchAtLogin.plistURL.path)")
+                exit(0)
+            } catch {
+                FileHandle.standardError.write(Data("usagebar: \(error.localizedDescription)\n".utf8))
+                exit(1)
+            }
         }
 
         let settings = SettingsStore().load()
@@ -53,7 +75,9 @@ enum CLI {
         let semaphore = DispatchSemaphore(value: 0)
 
         Task {
-            let service = UsageService(settings: settings)
+            // In memory only: the report shows what this run fetched, and the
+            // running app's snapshot.json is left alone.
+            let service = UsageService(settings: settings, persistent: false)
             box.value = await service.refresh(force: true)
             semaphore.signal()
         }
@@ -143,9 +167,12 @@ enum CLI {
           usagebar --json       refresh once, print the raw snapshot as JSON, exit
           usagebar --version    print the version
           usagebar --help       this text
+          usagebar --enable-launch-at-login    start this copy at login
+          usagebar --disable-launch-at-login   stop starting at login
 
         EXIT CODES:
-          0  ok        2  one or more services failed        70  timeout
+          0  ok        1  launch at login failed        2  one or more services failed
+          70  timeout
 
         CREDENTIALS:
           Codex   ~/.codex/auth.json          (sign in with Codex or ChatGPT desktop)

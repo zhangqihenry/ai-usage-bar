@@ -31,19 +31,24 @@ let package = Package(
         .library(name: "UsageBarCore", targets: ["UsageBarCore"])
     ],
     targets: [
+        // Each folder carries a README for humans; excluding it keeps SwiftPM
+        // from warning about unhandled files on every build.
         .target(
             name: "UsageBarCore",
-            path: "Sources/UsageBarCore"
+            path: "Sources/UsageBarCore",
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "UsageBar",
             dependencies: ["UsageBarCore"],
-            path: "Sources/UsageBar"
+            path: "Sources/UsageBar",
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "UsageBarSelfTest",
             dependencies: ["UsageBarCore"],
             path: "Tests/UsageBarCoreTests",
+            exclude: ["README.md"],
             resources: [
                 // JSON fixtures are copied verbatim so tests read them like
                 // real API responses instead of inline string literals.

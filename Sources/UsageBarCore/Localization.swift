@@ -33,7 +33,10 @@ public enum L {
         "menu.openFolder": ("打开配置文件夹", "Open Config Folder"),
         "menu.quit": ("退出", "Quit"),
         "menu.updated": ("更新于 %@", "Updated %@"),
-        "menu.stale": ("更新于 %@（数据可能已过期）", "Updated %@ (stale)"),
+        "menu.checked": ("上次刷新 %@", "Last checked %@"),
+        "menu.checkedStale": ("上次刷新 %@（部分数据已过期）", "Last checked %@ (some data is stale)"),
+        "menu.dataAge": ("显示的是 %@前的数据", "showing data from %@ ago"),
+        "menu.remaining": ("显示剩余量", "showing remaining"),
         "menu.never": ("尚未获取数据", "No data yet"),
         "menu.windowReset": ("%@后重置", "resets in %@"),
         "menu.noWindow": ("无此窗口", "not on this plan"),
@@ -63,6 +66,17 @@ public enum L {
         "settings.refresh": ("立即刷新", "Refresh now"),
         "settings.reset": ("恢复默认", "Reset to defaults"),
         "settings.version": ("版本 %@", "Version %@"),
+        "settings.notifications": ("提醒", "Alerts"),
+        "settings.notify": ("额度达到阈值时发送通知", "Notify when a quota crosses a threshold"),
+        "settings.warnThreshold": ("黄色提醒阈值：%d%%", "Amber at %d%%"),
+        "settings.dangerThreshold": ("红色警告阈值：%d%%", "Red at %d%%"),
+        "settings.notifyHint": ("同一个窗口每升一级只提醒一次，窗口重置后重新计算。",
+                                "Each window alerts once per level and re-arms when it resets."),
+
+        // Notifications
+        "notify.title": ("%@ %@ 窗口已用 %@", "%@ %@ window at %@"),
+        "notify.reset": ("%@后重置", "Resets in %@"),
+        "notify.noReset": ("重置时间未知", "Reset time unknown"),
 
         // Errors
         "error.credentials_missing": ("未找到登录凭证，请先登录对应客户端。", "Credentials not found. Sign in with the vendor client first."),

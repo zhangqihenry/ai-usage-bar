@@ -64,7 +64,7 @@ final class StatusItemController: NSObject {
         }
 
         button.attributedTitle = title
-        button.toolTip = tooltip(snapshot: snapshot)
+        button.toolTip = tooltip(snapshot: snapshot, settings: settings)
         button.appearsDisabled = false
 
         Log.debug("render: \"\(title.string)\" visible=\(statusItem.isVisible) "
@@ -73,16 +73,22 @@ final class StatusItemController: NSObject {
 
     /// Detailed hover text: what each number means, plus reset countdowns and
     /// any error the last refresh produced.
-    private func tooltip(snapshot: UsageSnapshot) -> String {
+    private func tooltip(snapshot: UsageSnapshot, settings: AppSettings) -> String {
         var lines: [String] = []
-        for service in Service.allCases {
+        for service in Service.allCases where settings.isVisible(service) {
             guard let result = snapshot.result(for: service) else { continue }
             var line = service.displayName
             if let usage = result.usage {
-                let session = usage.session.map { Format.percent($0.usedPercent) } ?? "–"
-                let weekly = usage.weekly.map { Format.percent($0.usedPercent) } ?? "–"
-                line += "  5h \(session) · week \(weekly)"
+                func text(_ window: QuotaWindow?) -> String {
+                    guard let window else { return "–" }
+                    return Format.percent(settings.showRemaining ? window.remainingPercent : window.usedPercent)
+                }
+                line += "  5h \(text(usage.session)) · week \(text(usage.weekly))"
+                if settings.showRemaining { line += "  " + L.t("menu.remaining") }
                 if let plan = usage.plan { line += "  (\(plan))" }
+                if usage.isStale(limit: settings.staleAfter) {
+                    line += "\n  " + L.t("menu.dataAge", Format.elapsed(since: usage.fetchedAt))
+                }
             }
             if let code = result.errorCode {
                 line += "\n  " + L.describe(code: code, detail: result.errorDetail)
@@ -90,7 +96,7 @@ final class StatusItemController: NSObject {
             lines.append(line)
         }
         if lines.isEmpty { return "UsageBar" }
-        lines.append(L.t("menu.updated", Format.clock(snapshot.updatedAt)))
+        lines.append(L.t("menu.checked", Format.clock(snapshot.updatedAt)))
         return lines.joined(separator: "\n")
     }
 

@@ -93,22 +93,38 @@ Check the Keychain item exists:
 security find-generic-password -s "Claude Code-credentials" >/dev/null && echo found
 ```
 
-## A Keychain prompt appears on every launch
+## A Keychain prompt appears
 
-macOS asks before another app reads Claude's credential item. Choose **Always
-Allow**. Rebuilding the app changes its signature, so the grant is forgotten —
-that is macOS, not the app. A stable signed build keeps the grant.
+The app reads Claude's credential item through `/usr/bin/security`, so the
+prompt (if any) asks on behalf of `security`. Choose **Always Allow**; that
+trust is attached to the system tool, so rebuilding UsageBar does not reset it.
+If nobody answers, the read gives up after 30 seconds and the Claude row says
+"Timed out reading the Keychain item" instead of freezing every later refresh.
+
+## Numbers look old / "showing data from … ago"
+
+When a refresh fails the app keeps the last good numbers instead of blanking
+the menu bar. Once they are older than three polling intervals (at least 15
+minutes) they are drawn dimmed, the service gets a "showing data from 3h ago"
+line, and the footer reads "Last checked … (some data is stale)". Fix the error
+shown under that service and the next refresh brings live numbers back.
 
 ## 429 / "请求过于频繁"
 
 The Claude usage endpoint limits calls per token window. The app already enforces
-a 240 s floor for Claude and caches the last response; if it still happens, raise
-the refresh interval in Settings. Numbers keep displaying from the cache.
+a 240 s floor for Claude and caches the last response. After a 429 it pauses
+that service for 5 minutes, doubling on each consecutive 429 up to an hour; even
+"Refresh Now" waits, and the error line shows the retry time. If it keeps
+happening, raise the refresh interval in Settings. Numbers keep displaying from
+the cache.
 
 ## Numbers look frozen
 
-- Check the dropdown's "更新于 …" line; after three intervals it turns amber.
-- The app pauses polling while the machine sleeps and refreshes on wake.
+- Check the dropdown's "上次刷新 …" line; it turns amber when a service is
+  showing kept, stale numbers.
+- The app pauses polling while the machine sleeps and refreshes 5 s after wake.
+  If the network is not back yet it retries after 30 s, 60 s, 120 s … up to the
+  polling interval.
 - `USAGEBAR_DEBUG=1` plus `~/Library/Application Support/UsageBar/usagebar.log`
   shows every refresh attempt and its outcome.
 

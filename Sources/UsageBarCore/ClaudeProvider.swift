@@ -88,12 +88,48 @@ public struct ClaudeProvider: Sendable {
             var utilization: Double?
             var resetsAt: String?
             var scope: Scope?
+
+            /// The live API sends `resets_at`; `resetsAt` is accepted as well so
+            /// a casing change does not silently drop every reset time.
+            enum CodingKeys: String, CodingKey {
+                case kind, percent, utilization, scope
+                case resetsAt = "resets_at"
+            }
+
+            enum AlternateKeys: String, CodingKey {
+                case camelResetsAt = "resetsAt"
+            }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                kind = try container.decodeIfPresent(String.self, forKey: .kind)
+                percent = try container.decodeIfPresent(Double.self, forKey: .percent)
+                utilization = try container.decodeIfPresent(Double.self, forKey: .utilization)
+                scope = try container.decodeIfPresent(Scope.self, forKey: .scope)
+                resetsAt = try container.decodeIfPresent(String.self, forKey: .resetsAt)
+                if resetsAt == nil {
+                    let alternate = try decoder.container(keyedBy: AlternateKeys.self)
+                    resetsAt = try alternate.decodeIfPresent(String.self, forKey: .camelResetsAt)
+                }
+            }
+        }
+
+        /// Pay-as-you-go usage beyond the plan ("extra usage"), when enabled.
+        struct ExtraUsage: Decodable {
+            var isEnabled: Bool?
+            var utilization: Double?
+
+            enum CodingKeys: String, CodingKey {
+                case isEnabled = "is_enabled"
+                case utilization
+            }
         }
 
         var fiveHour: Bucket?
         var sevenDay: Bucket?
         var sevenDayOpus: Bucket?
         var sevenDaySonnet: Bucket?
+        var extraUsage: ExtraUsage?
         var limits: [Limit]?
 
         enum CodingKeys: String, CodingKey {
@@ -101,6 +137,7 @@ public struct ClaudeProvider: Sendable {
             case sevenDay = "seven_day"
             case sevenDayOpus = "seven_day_opus"
             case sevenDaySonnet = "seven_day_sonnet"
+            case extraUsage = "extra_usage"
             case limits
         }
     }
@@ -147,6 +184,15 @@ public struct ClaudeProvider: Sendable {
             var copy = window
             copy.scope = name
             scoped.append(copy)
+        }
+
+        // 4. Extra usage, shown as one more scoped row while it is switched on.
+        //    It is a monthly budget; `kind` only matters for the two main slots,
+        //    so `.weekly` here is a placeholder, and there is no reset time.
+        if let extra = decoded.extraUsage, extra.isEnabled == true, let value = extra.utilization {
+            scoped.append(QuotaWindow(kind: .weekly,
+                                      usedPercent: max(0, min(100, value)),
+                                      scope: "Extra"))
         }
 
         guard session != nil || weekly != nil || !scoped.isEmpty else {

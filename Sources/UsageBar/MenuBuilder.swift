@@ -26,9 +26,7 @@ enum MenuBuilder {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
-        for service in Service.allCases {
-            let visible = service == .codex ? context.settings.showCodex : context.settings.showClaude
-            guard visible else { continue }
+        for service in Service.allCases where context.settings.isVisible(service) {
             appendService(service, context: context, to: menu)
         }
 
@@ -40,13 +38,18 @@ enum MenuBuilder {
 
         menu.addItem(.separator())
 
-        // Data freshness. Turns amber when the snapshot is older than three
-        // polling intervals, which means refreshes are failing silently.
-        let stale = Date().timeIntervalSince(context.snapshot.updatedAt)
-            > Double(context.settings.refreshIntervalSeconds) * 3
+        // Last refresh attempt. `updatedAt` moves on every attempt, failed or
+        // not, so staleness is judged from each service's own `fetchedAt`: the
+        // line turns amber when any visible service is showing kept old numbers.
+        let now = Date()
+        let stale = Service.allCases.contains { service in
+            guard context.settings.isVisible(service),
+                  let usage = context.snapshot.result(for: service)?.usage else { return false }
+            return usage.isStale(limit: context.settings.staleAfter, now: now)
+        }
         let updated = context.snapshot.updatedAt == .distantPast
             ? L.t("menu.never")
-            : L.t(stale ? "menu.stale" : "menu.updated", Format.clock(context.snapshot.updatedAt))
+            : L.t(stale ? "menu.checkedStale" : "menu.checked", Format.clock(context.snapshot.updatedAt))
         let freshness = NSMenuItem(title: updated, action: nil, keyEquivalent: "")
         freshness.attributedTitle = NSAttributedString(string: updated, attributes: [
             .font: NSFont.systemFont(ofSize: 11),
@@ -83,6 +86,9 @@ enum MenuBuilder {
         if let plan = result?.usage?.plan, !plan.isEmpty {
             headerText += "  ·  " + plan
         }
+        if context.settings.showRemaining, result?.usage != nil {
+            headerText += "  ·  " + L.t("menu.remaining")
+        }
         let header = NSMenuItem(title: headerText, action: nil, keyEquivalent: "")
         let headerFont = NSFont.systemFont(ofSize: 12, weight: .semibold)
         header.attributedTitle = NSAttributedString(string: headerText, attributes: [
@@ -111,11 +117,31 @@ enum MenuBuilder {
                 let label = window.scope ?? "Model"
                 menu.addItem(row(window: window, font: rowFont, settings: context.settings, label: label))
             }
+
+            // Provider notes ("limit reached", "credits 3"). The vendor's own
+            // words stay English except the one we have a translation for.
+            if !usage.notes.isEmpty {
+                let text = usage.notes
+                    .map { $0 == "limit reached" ? L.t("menu.limitReached") : $0 }
+                    .joined(separator: "  ·  ")
+                menu.addItem(disabled("   " + text,
+                                      font: NSFont.systemFont(ofSize: 11),
+                                      color: .secondaryLabelColor))
+            }
         }
 
         if let code = result?.errorCode {
             let message = L.describe(code: code, detail: result?.errorDetail)
             menu.addItem(disabled("   ⚠︎ " + truncate(message, 52),
+                                  font: NSFont.systemFont(ofSize: 11),
+                                  color: .systemOrange))
+        }
+
+        // Kept numbers from an earlier success: say how old they are, because
+        // the rows above look exactly like a live reading.
+        if let usage = result?.usage, usage.isStale(limit: context.settings.staleAfter) {
+            let age = L.t("menu.dataAge", Format.elapsed(since: usage.fetchedAt))
+            menu.addItem(disabled("   " + age,
                                   font: NSFont.systemFont(ofSize: 11),
                                   color: .systemOrange))
         }
@@ -129,8 +155,11 @@ enum MenuBuilder {
                             settings: AppSettings,
                             label: String? = nil) -> NSMenuItem {
         let name = label ?? window.kind.shortLabel
-        let percent = Format.percent(window.usedPercent)
-        let bar = Format.bar(window.usedPercent, width: 10)
+        // Text and bar follow the "show remaining" setting like the menu bar
+        // title does; the colour always tracks consumption.
+        let value = settings.showRemaining ? window.remainingPercent : window.usedPercent
+        let percent = Format.percent(value)
+        let bar = Format.bar(value, width: 10)
         let reset = window.resetsAt.map { L.t("menu.windowReset", Format.countdown(to: $0)) } ?? ""
 
         let text = "   " + pad(name, 5) + " " + bar + "  " + padLeft(percent, 4) + "  " + reset
@@ -144,9 +173,9 @@ enum MenuBuilder {
 
     private static func needsCredentialHelp(_ context: Context) -> Bool {
         Service.allCases.contains { service in
-            let visible = service == .codex ? context.settings.showCodex : context.settings.showClaude
-            guard visible else { return false }
-            return context.snapshot.result(for: service)?.errorCode == "credentials_missing"
+            guard context.settings.isVisible(service) else { return false }
+            let code = context.snapshot.result(for: service)?.errorCode
+            return code == "credentials_missing" || code == "credentials_expired"
         }
     }
 

@@ -34,18 +34,36 @@ public enum Format {
         return remainder == 0 ? "\(days)d" : "\(days)d\(remainder)h"
     }
 
-    /// "14:32" – local wall clock time, used for "updated at".
-    public static func clock(_ date: Date) -> String {
+    /// Coarse age of a past moment in the same units as `countdown`: "45m",
+    /// "3h", "131d5h". Used for "showing data from 2h ago".
+    public static func elapsed(since date: Date, now: Date = Date()) -> String {
+        let seconds = max(0, now.timeIntervalSince(date))
+        if seconds < 60 { return "<1m" }
+        return countdown(to: now.addingTimeInterval(seconds), now: now)
+    }
+
+    // Built once: DateFormatter is expensive to create and these run on every
+    // render. Formatting from several threads is safe on macOS.
+    private static let clockFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d HH:mm"
+        return formatter
+    }()
+
+    /// "14:32" – local wall clock time, used for "updated at".
+    public static func clock(_ date: Date) -> String {
+        clockFormatter.string(from: date)
     }
 
     /// "Oct 23 14:32" – for the CLI and diagnostics.
     public static func timestamp(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d HH:mm"
-        return formatter.string(from: date)
+        timestampFormatter.string(from: date)
     }
 
     /// A 10 cell ASCII progress bar, e.g. `████░░░░░░`.

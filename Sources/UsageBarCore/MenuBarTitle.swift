@@ -35,12 +35,15 @@ public enum MenuBarTitle {
     /// A service that is hidden in settings is skipped entirely; a service that
     /// failed to refresh but has older data still prints the old numbers (the
     /// menu exposes the error) so the menu bar never flickers to an empty state.
-    public static func segments(snapshot: UsageSnapshot, settings: AppSettings) -> [TitleSegment] {
+    /// Old numbers that are past `AppSettings.staleAfter` are drawn muted, so
+    /// months-old data can never pass for a live reading.
+    public static func segments(snapshot: UsageSnapshot,
+                                settings: AppSettings,
+                                now: Date = Date()) -> [TitleSegment] {
         var groups: [[TitleSegment]] = []
 
         for service in Service.allCases {
-            let visible = service == .codex ? settings.showCodex : settings.showClaude
-            guard visible else { continue }
+            guard settings.isVisible(service) else { continue }
 
             let result = snapshot.result(for: service)
             var parts: [TitleSegment] = [
@@ -48,7 +51,10 @@ public enum MenuBarTitle {
             ]
 
             let values = valuesText(usage: result?.usage, settings: settings)
-            parts.append(TitleSegment(text: " " + values.text, severity: values.severity, service: service))
+            let stale = result?.usage?.isStale(limit: settings.staleAfter, now: now) ?? false
+            parts.append(TitleSegment(text: " " + values.text,
+                                      severity: stale ? .muted : values.severity,
+                                      service: service))
 
             if result?.errorCode != nil {
                 parts.append(TitleSegment(text: "!", severity: .danger, service: service))
@@ -71,8 +77,10 @@ public enum MenuBarTitle {
     }
 
     /// Joined plain text, used for tooltips, logs and the CLI.
-    public static func plainText(snapshot: UsageSnapshot, settings: AppSettings) -> String {
-        segments(snapshot: snapshot, settings: settings).map(\.text).joined()
+    public static func plainText(snapshot: UsageSnapshot,
+                                 settings: AppSettings,
+                                 now: Date = Date()) -> String {
+        segments(snapshot: snapshot, settings: settings, now: now).map(\.text).joined()
     }
 
     // MARK: - Helpers
